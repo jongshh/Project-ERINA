@@ -1,0 +1,5 @@
+torch           # PyTorch (for deep learning)
+transformers    # Hugging Face (for NLP models)
+librosa         # For audio processing
+SpeechRecognition
+pyttsx3

@@ -1,6 +1,0 @@
-- numpy
-- SpeechRecognition
-- pyttsx3
-- transformers # Hugging Face for NLP
-- librosa # For audio processing
-
