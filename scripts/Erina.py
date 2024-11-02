@@ -16,23 +16,93 @@ config_file = 'config.json'
 
 
 #Config Module
-def load_config():
-    if os.path.exists(config_file):
-        with open(config_file, 'r', encoding='utf-8') as file:
-            config = json.load(file)
-            return config.get('ollama_path', "")
-    return ""
+def load_config(filename):
+    if os.path.exists(filename):
+        with open(filename, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    else:
+        # 기본 설정 반환
+        default_config = {
+            "default_ratemode": True,
+            "default_randomspeak": False,
+            "short_term_memory_length": 5,
+            "ollama_path": ""
+        }
+        # 기본 설정을 새 파일로 저장
+        with open(filename, 'w', encoding='utf-8') as file:
+            json.dump(default_config, file, ensure_ascii=False, indent=4)
+        return default_config
+
+# UI Module
+def main_menu():
+    config = load_config('config.json')
+    while True:
+        print("\n=== Main Menu ===")
+        print("0. Set Ollama Path")
+        print("1. Start Ollama")
+        print("2. Start Chat")
+        print("3. Custom Erina")
+        print("4. Exit")
+
+        choice = input("Select an option (0/1/2/3/4): ")
+
+        if choice == "0":
+            set_ollama_path()
+        elif choice == "1":
+            start_ollama(config['ollama_path'])
+        elif choice == "2":
+            chat()
+        elif choice == "3":
+            custom_erina_settings()
+        elif choice == "4":
+            print("Exiting the program.")
+            break
+        else:
+            print("Invalid choice. Please select 0, 1, 2, 3, or 4.")
+            
+def custom_erina_settings():
+    config = load_config('config.json')
+    
+    while True:
+        print("\n=== Custom Erina Settings ===")
+        print(f"1. Default Ratemode: {'On' if config['default_ratemode'] else 'Off'}")
+        print(f"2. Default Randomspeak: {'On' if config['default_randomspeak'] else 'Off'}")
+        print(f"3. Short-term Memory Length: {config['short_term_memory_length']}")
+        print("4. Save and Exit")
+
+        choice = input("Select an option (1/2/3/4): ")
+
+        if choice == "1":
+            config['default_ratemode'] = not config['default_ratemode']
+        elif choice == "2":
+            config['default_randomspeak'] = not config['default_randomspeak']
+        elif choice == "3":
+            new_length = input("Enter new short-term memory length: ")
+            if new_length.isdigit():
+                config['short_term_memory_length'] = int(new_length)
+            else:
+                print("Invalid input. Please enter a valid number.")
+        elif choice == "4":
+            with open('config.json', 'w', encoding='utf-8') as file:
+                json.dump(config, file, ensure_ascii=False, indent=4)
+            print("Settings saved successfully.")
+            break
+        else:
+            print("Invalid choice. Please select 1, 2, 3, or 4.")
+
+# Ollama Module
 
 def set_ollama_path():
+    config = load_config('config.json')
     ollama_path = input("Enter the full path to Ollama executable: ").strip()
-    config = {"ollama_path": ollama_path}
-    with open(config_file, 'w', encoding='utf-8') as file:
+    config['ollama_path'] = ollama_path
+    
+    with open('config.json', 'w', encoding='utf-8') as file:
         json.dump(config, file, ensure_ascii=False, indent=4)
+    
     print("Ollama path saved successfully.")
     return ollama_path
 
-
-# Ollama Module
 def start_ollama(ollama_path):
     for proc in psutil.process_iter(['name']):
         if 'ollama' in proc.info['name'].lower():
@@ -68,12 +138,20 @@ def load_memory(filename):
 
 def save_memory(filename, memory):
     existing_memory = load_memory(filename)
-    existing_memory.extend(memory)  
     
+    unique_memory = []
+    existing_inputs = {entry['input'] for entry in existing_memory}  
+    
+    for entry in memory:
+        if entry['input'] not in existing_inputs:  
+            unique_memory.append(entry)
+
+    combined_memory = existing_memory + unique_memory  
+
     with open(filename, 'w', encoding='utf-8') as file:
-        json.dump(existing_memory, file, ensure_ascii=False, indent=4)
+        json.dump(combined_memory, file, ensure_ascii=False, indent=4)
         #print("Memory Module Saved successfully.") #After, Enabling this for Debugging.
-        
+
 def add_to_memory(memory, user_input, response, rating=None):
     memory.append({
         "timestamp": datetime.now().isoformat(),
@@ -106,26 +184,31 @@ def random_message_thread(context, random_speak_enabled):
 
 # Basic Text-2-Text Module
 def chat():
+    config = load_config('config.json')
     memory = load_memory('data/erina_memory.json')  # Load persistent memory
-
+    MemoryLength = config['short_term_memory_length']
+    
     print("Chat Started, Type 'exit' to quit.")
-    context = [f"You: {entry['input']} | Erina: {entry['output']}" for entry in memory[-5:]]
+    context = [f"You: {entry['input']} | Erina: {entry['output']}" for entry in memory[-MemoryLength:]]
     conversations = memory[:]
 
     # Create a threading Event to toggle random speak mode
     random_speak_enabled = threading.Event()
-    random_speak_enabled.clear()  # Start with random speaking disabled
+    if config['default_randomspeak']:
+        random_speak_enabled.set()  # Enable random speaking if configured
+    else:
+        random_speak_enabled.clear()  # Disable random speaking if configured
 
     # Start the random message generation thread
     threading.Thread(target=random_message_thread, args=(context, random_speak_enabled), daemon=True).start()
 
-    rating_mode = False
+    rating_mode = config['default_ratemode']  # Use config setting
 
     while True:
         user_input = input("You: ")
         if user_input.lower() == "exit":
             context.append(f"You: {user_input}")
-            context_input = "\n".join(context[-5:])
+            context_input = "\n".join(context[-MemoryLength:])
 
             response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}])
             response_text = response['message']['content'].strip()
@@ -148,7 +231,7 @@ def chat():
             continue
 
         context.append(f"You: {user_input}")
-        context_input = "\n".join(context[-5:])
+        context_input = "\n".join(context[-MemoryLength:])
 
         # Stream Erina's response
         response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}], stream=True)
@@ -184,40 +267,6 @@ def chat():
             conversations.append({"input": user_input, "output": response_text, "rating": 5})
             save_memory('data/erina_memory.json', conversations)
             conversations.clear()
-            
-# UI Module
-def main_menu():
-    ollama_path = load_config()
-
-    while True:
-        print("\n=== Main Menu ===")
-        print("0. Set Ollama Path")
-        print("1. Start Ollama")
-        print("2. Start Chat")
-        print("3. Exit")
-
-        choice = input("Select an option (0/1/2/3): ")
-
-        if choice == "0":
-            ollama_path = set_ollama_path()
-            continue
-        elif choice == "1":
-            if ollama_path == "":
-                print("Ollama path is not set. Please set it first.")
-            elif start_ollama(ollama_path):
-                initialize_model()  
-            continue
-        elif choice == "2":
-            if not model_loaded:
-                print("Please start Ollama first.")
-            else:
-                chat()  
-            continue
-        elif choice == "3":
-            print("Exiting the program.")
-            break
-        else:
-            print("Invalid choice. Please select 0, 1, 2, or 3.")
 
 if __name__ == "__main__":
     main_menu()
