@@ -39,17 +39,24 @@ def save_conversation(filename, conversations):
         json.dump(existing_conversations, file, ensure_ascii=False, indent=4)
 
 def generate_random_message(context):
-    # Generate a random message based on the context
+    # Generate a random message with streaming
     prompt = "\n".join(context[-5:]) + "\nErina:"
-    response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': prompt}])
-    return response['message']['content'].strip()
+    response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': prompt}], stream=True)
+    response_text = ""
+
+    print("Erina (random message): ", end="", flush=True)
+    for response in response_stream:
+        print(response['message']['content'], end="", flush=True)
+        response_text += response['message']['content']
+        time.sleep(0.1)  # Simulate streaming delay
+    print()  # New line after response
+    return response_text.strip()
 
 def random_message_thread(context, random_speak_enabled):
     while True:
         time.sleep(random.randint(10, 30))  # Random interval between 10 to 30 seconds
         if random_speak_enabled.is_set() and context:  # Check if random speak is enabled and if there is context available
             random_message = generate_random_message(context)
-            print(f"Erina (random message): {random_message}")
             context.append(f"Erina: {random_message}")
 
 def chat():
@@ -99,9 +106,17 @@ def chat():
         context.append(f"You: {user_input}")
         context_input = "\n".join(context[-5:])
 
-        response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}])
-        response_text = response['message']['content'].strip()
-        print(f"Erina: {response_text}")
+        # Stream Erina's response
+        response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}], stream=True)
+        response_text = ""
+        print("Erina: ", end="", flush=True)
+
+        for response in response_stream:
+            print(response['message']['content'], end="", flush=True)
+            response_text += response['message']['content']
+            time.sleep(0.1)  # Simulate streaming delay
+        print()  # New line after response
+
         context.append(f"Erina: {response_text}")
 
         if rating_mode:
