@@ -1,6 +1,6 @@
 {
     "default_ratemode": false,
     "default_randomspeak": false,
-    "short_term_memory_length": 15,
+    "short_term_memory_length": 20,
     "ollama_path": "C:\\Users\\zion2\\AppData\\Local\\Programs\\Ollama\\ollama app.exe"
 }

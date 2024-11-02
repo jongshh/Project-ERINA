@@ -8,6 +8,7 @@ import time
 import threading
 from datetime import datetime
 from Identity import *
+from LTM import *
 
 #Global Variable
 GlobalModel = 'Erina'
@@ -21,14 +22,12 @@ def load_config(filename):
         with open(filename, 'r', encoding='utf-8') as file:
             return json.load(file)
     else:
-        # 기본 설정 반환
         default_config = {
             "default_ratemode": True,
             "default_randomspeak": False,
             "short_term_memory_length": 5,
             "ollama_path": ""
         }
-        # 기본 설정을 새 파일로 저장
         with open(filename, 'w', encoding='utf-8') as file:
             json.dump(default_config, file, ensure_ascii=False, indent=4)
         return default_config
@@ -118,26 +117,31 @@ def start_ollama(ollama_path):
         return False
     
 # Model Module
+# Erina Module
 def initialize_model():
     global model_loaded
     if not model_loaded:
         try:
-            ollama.create(model=GlobalModel, modelfile=modeltype)
+            ollama.create(model=GlobalModel, modelfile=Identity)
             model_loaded = True
             print("Model initialized successfully.")
         except Exception as e:
             print(f"Failed to initialize model: {e}")
+            
+# L.T.M Module.
+
 
 # Memory Module
-def load_memory(filename):
+# S.T.M (Short-Term-Memory)
+def load_short_term_memory(filename):
     if os.path.exists(filename):
         with open(filename, 'r', encoding='utf-8') as file:
             return json.load(file)
     print("Memory Module loaded successfully.")
     return []
 
-def save_memory(filename, memory):
-    existing_memory = load_memory(filename)
+def save_short_term_memory(filename, memory):
+    existing_memory = load_short_term_memory(filename)
     
     unique_memory = []
     existing_inputs = {entry['input'] for entry in existing_memory}  
@@ -152,7 +156,7 @@ def save_memory(filename, memory):
         json.dump(combined_memory, file, ensure_ascii=False, indent=4)
         #print("Memory Module Saved successfully.") #After, Enabling this for Debugging.
 
-def add_to_memory(memory, user_input, response, rating=None):
+def add_to_short_term_memory(memory, user_input, response, rating=None):
     memory.append({
         "timestamp": datetime.now().isoformat(),
         "input": user_input,
@@ -185,7 +189,7 @@ def random_message_thread(context, random_speak_enabled):
 # Basic Text-2-Text Module
 def chat():
     config = load_config('config.json')
-    memory = load_memory('data/erina_memory.json')  # Load persistent memory
+    memory = load_short_term_memory('data/erina_short_term_memory.json')  # Load persistent memory
     MemoryLength = config['short_term_memory_length']
     
     print("Chat Started, Type 'exit' to quit.")
@@ -259,14 +263,15 @@ def chat():
 
             conversations.append({"input": user_input, "output": response_text, "rating": rating})
 
-            save_memory('data/erina_memory.json', conversations)
+            save_short_term_memory('data/erina_short_term_memory.json', conversations)
             conversations.clear()
 
         else:
             # Default rating to 5 when rating mode is off
             conversations.append({"input": user_input, "output": response_text, "rating": 5})
-            save_memory('data/erina_memory.json', conversations)
+            save_short_term_memory('data/erina_short_term_memory.json', conversations)
             conversations.clear()
 
 if __name__ == "__main__":
+    initialize_model()
     main_menu()
