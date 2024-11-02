@@ -4,39 +4,35 @@ import ollama
 import random
 import time
 import threading
+from datetime import datetime
 from Identity import *
 
 GlobalModel = 'Erina'
 ollama.create(model=GlobalModel, modelfile=modelfile)
 
-# Load the dataset from a JSON file
-def load_dataset(filename):
-    print(f"Loading dataset from {filename}...")
-    with open(filename, 'r', encoding='utf-8') as file:
-        dataset = json.load(file)
-    print("Dataset loaded successfully.")
-    return dataset
-
-# Prepare training data
-def prepare_weighted_data(conversations):
-    print("Preparing training data...")
-    inputs = [f"Input: {item['input']}" for item in conversations]
-    outputs = [f"Output: {item['output']}" for item in conversations]
-    weights = [item['rating'] for item in conversations]
-    return inputs, outputs, weights
-
-def save_conversation(filename, conversations):
+# Memory Module
+def load_memory(filename):
     if os.path.exists(filename):
         with open(filename, 'r', encoding='utf-8') as file:
-            existing_conversations = json.load(file)
-    else:
-        existing_conversations = []
+            return json.load(file)
+    print("Memory Module loaded successfully.")
+    return []
 
-    unique_conversations = [entry for entry in conversations if entry not in existing_conversations]
-    existing_conversations.extend(unique_conversations)
-
+def save_memory(filename, memory):
+    existing_memory = load_memory(filename)
+    existing_memory.extend(memory)  # 기존 메모리에 새로운 메모리를 추가합니다.
+    
     with open(filename, 'w', encoding='utf-8') as file:
-        json.dump(existing_conversations, file, ensure_ascii=False, indent=4)
+        json.dump(existing_memory, file, ensure_ascii=False, indent=4)
+        print("Memory Module Saved successfully.")
+        
+def add_to_memory(memory, user_input, response, rating=None):
+    memory.append({
+        "timestamp": datetime.now().isoformat(),
+        "input": user_input,
+        "output": response,
+        "rating": rating
+    })
 
 def generate_random_message(context):
     # Generate a random message with streaming
@@ -60,13 +56,11 @@ def random_message_thread(context, random_speak_enabled):
             context.append(f"Erina: {random_message}")
 
 def chat():
-    dataset = load_dataset('data/erina_memory.json')
-    inputs, outputs, weights = prepare_weighted_data(dataset)
+    memory = load_memory('data/erina_memory.json')  # Load persistent memory
 
     print("Chat Started, Type 'exit' to quit.")
-    context = []
-    conversations = []
-    conversations.extend(dataset)
+    context = [f"You: {entry['input']} | Erina: {entry['output']}" for entry in memory[-5:]]
+    conversations = memory[:]
 
     # Create a threading Event to toggle random speak mode
     random_speak_enabled = threading.Event()
@@ -124,18 +118,21 @@ def chat():
                 rating = int(input("Rate my response from 1 to 10 (1 = terrible, 10 = excellent): "))
                 if rating < 1 or rating > 10:
                     print("Please enter a valid rating between 1 and 10.")
-                    continue
+                    rating = 5
+
             except ValueError:
-                print("Invalid input. Please enter a number between 1 and 10.")
-                continue
+                print("Invalid input. Rating set to default value of 5.")
+                rating = 5  # Default to 5 on ValueError
 
             conversations.append({"input": user_input, "output": response_text, "rating": rating})
 
-            if len(conversations) >= 10:
-                inputs, outputs, weights = prepare_weighted_data(conversations)
-                conversations.clear()
+            save_memory('data/erina_memory.json', conversations)
+            conversations.clear()
 
-            save_conversation('data/erina_memory.json', conversations)
+        else:
+            # Default rating to 5 when rating mode is off
+            conversations.append({"input": user_input, "output": response_text, "rating": 5})
+            save_memory('data/erina_memory.json', conversations)
             conversations.clear()
 
 if __name__ == "__main__":
