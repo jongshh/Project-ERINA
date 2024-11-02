@@ -2,13 +2,61 @@ import json
 import os
 import ollama
 import random
+import psutil
+import subprocess
 import time
 import threading
 from datetime import datetime
 from Identity import *
 
+#Global Variable
 GlobalModel = 'Erina'
-ollama.create(model=GlobalModel, modelfile=modelfile)
+model_loaded = False 
+config_file = 'config.json'
+
+
+#Config Module
+def load_config():
+    if os.path.exists(config_file):
+        with open(config_file, 'r', encoding='utf-8') as file:
+            config = json.load(file)
+            return config.get('ollama_path', "")
+    return ""
+
+def set_ollama_path():
+    ollama_path = input("Enter the full path to Ollama executable: ").strip()
+    config = {"ollama_path": ollama_path}
+    with open(config_file, 'w', encoding='utf-8') as file:
+        json.dump(config, file, ensure_ascii=False, indent=4)
+    print("Ollama path saved successfully.")
+    return ollama_path
+
+
+# Ollama Module
+def start_ollama(ollama_path):
+    for proc in psutil.process_iter(['name']):
+        if 'ollama' in proc.info['name'].lower():
+            print("Ollama is already running.")
+            return True
+
+    try:
+        subprocess.Popen([ollama_path])  
+        print("Ollama started successfully.")
+        return True
+    except Exception as e:
+        print(f"Failed to start Ollama: {e}")
+        return False
+    
+# Model Module
+def initialize_model():
+    global model_loaded
+    if not model_loaded:
+        try:
+            ollama.create(model=GlobalModel, modelfile=modeltype)
+            model_loaded = True
+            print("Model initialized successfully.")
+        except Exception as e:
+            print(f"Failed to initialize model: {e}")
 
 # Memory Module
 def load_memory(filename):
@@ -20,11 +68,11 @@ def load_memory(filename):
 
 def save_memory(filename, memory):
     existing_memory = load_memory(filename)
-    existing_memory.extend(memory)  # 기존 메모리에 새로운 메모리를 추가합니다.
+    existing_memory.extend(memory)  
     
     with open(filename, 'w', encoding='utf-8') as file:
         json.dump(existing_memory, file, ensure_ascii=False, indent=4)
-        print("Memory Module Saved successfully.")
+        #print("Memory Module Saved successfully.") #After, Enabling this for Debugging.
         
 def add_to_memory(memory, user_input, response, rating=None):
     memory.append({
@@ -34,6 +82,7 @@ def add_to_memory(memory, user_input, response, rating=None):
         "rating": rating
     })
 
+# Randomspeak Module
 def generate_random_message(context):
     # Generate a random message with streaming
     prompt = "\n".join(context[-5:]) + "\nErina:"
@@ -55,6 +104,7 @@ def random_message_thread(context, random_speak_enabled):
             random_message = generate_random_message(context)
             context.append(f"Erina: {random_message}")
 
+# Basic Text-2-Text Module
 def chat():
     memory = load_memory('data/erina_memory.json')  # Load persistent memory
 
@@ -134,6 +184,40 @@ def chat():
             conversations.append({"input": user_input, "output": response_text, "rating": 5})
             save_memory('data/erina_memory.json', conversations)
             conversations.clear()
+            
+# UI Module
+def main_menu():
+    ollama_path = load_config()
+
+    while True:
+        print("\n=== Main Menu ===")
+        print("0. Set Ollama Path")
+        print("1. Start Ollama")
+        print("2. Start Chat")
+        print("3. Exit")
+
+        choice = input("Select an option (0/1/2/3): ")
+
+        if choice == "0":
+            ollama_path = set_ollama_path()
+            continue
+        elif choice == "1":
+            if ollama_path == "":
+                print("Ollama path is not set. Please set it first.")
+            elif start_ollama(ollama_path):
+                initialize_model()  
+            continue
+        elif choice == "2":
+            if not model_loaded:
+                print("Please start Ollama first.")
+            else:
+                chat()  
+            continue
+        elif choice == "3":
+            print("Exiting the program.")
+            break
+        else:
+            print("Invalid choice. Please select 0, 1, 2, or 3.")
 
 if __name__ == "__main__":
-    chat()
+    main_menu()
