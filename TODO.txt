@@ -1,10 +1,20 @@
-L.T.M (Long-Term Memory Module)
+**L.T.M (Long-Term Memory Module)**
 
-1. data/Long-Term-Memory.Json에 각각의 특징들을 나열하는 어레이를 생성. (외형, 성격, 아는 사람, 좋아하는 것, 싫어하는 것...)
-2. 대화가 충분히 (15번 정도) 이루어지면, L.T.M 생성 모델이 해당 대화록 (S.T.M, Short-Term-Memory) 에서 15번 동안의 대화동안 추출할 수 있는 외형, 성격, 아는 사람.. 등등을 읽고, 정해진 프롬프트 (L.T.M.py)의 형식대로 내보냄.
-3. 내보내진 데이터는, 각각의 어레이에 추가되고, 이 과정에서 중복되지 않도록 검사를 실행하여 추가. 
-4. 이렇게 저장된 데이터는, ERINA 모델이 대화를 생성할 때 참고할 수 있도록 함.
-반복.
+1. Create an array in `data/erina_long-term-memory.Json` that lists each characteristic (appearance, personality, acquaintances, likes, dislikes, etc.).
+2. After sufficient conversations (about 15 times), the L.T.M generation model reads the conversation logs from `data/erina_short_term_memory` to extract characteristics such as appearance, personality, acquaintances, etc., from the last 15 interactions, and outputs it in the specified format of the prompt (L.T.M.py).
 
+   ```python
+   LMTmodel = '''
+   FROM rolandroland/llama3.1-uncensored
+   SYSTEM: 
+   '''
 
-추가 아이디어 : Decaying System? 오래된 장기기억을 삭제하는 것. (단, Personality와 같은 핵심 요소들은 예외. 아는 사람과 같은 잊을 수 있는 요소들을 저장된 순서에 따라 잊도록하기?)
+   ollama.create(model='LMT', modelfile=LMTmodel)
+
+   ollama.generate(model='LMT', prompt=context from 'erina_short_term_memory')
+   ```
+
+3. The exported data is added to each array, with checks performed to ensure no duplicates are added during this process.
+4. The data stored in this way will be referenced by the ERINA model when generating conversations. Repeat.
+
+**Additional Idea:** Decaying System? Delete old long-term memories. (However, core elements like personality should be exceptions. For forgettable elements like acquaintances, allow them to be forgotten based on the order they were stored.)

@@ -8,13 +8,14 @@ import time
 import threading
 from datetime import datetime
 from Identity import *
-from LTM import *
+from LTM_Module import *
 
 #Global Variable
 GlobalModel = 'Erina'
-model_loaded = False 
+Erina_model_loaded = False 
 config_file = 'config.json'
 
+# ollama.pull('rolandroland/llama3.1-uncensored')
 
 #Config Module
 def load_config(filename):
@@ -90,7 +91,6 @@ def custom_erina_settings():
             print("Invalid choice. Please select 1, 2, 3, or 4.")
 
 # Ollama Module
-
 def set_ollama_path():
     config = load_config('config.json')
     ollama_path = input("Enter the full path to Ollama executable: ").strip()
@@ -119,17 +119,14 @@ def start_ollama(ollama_path):
 # Model Module
 # Erina Module
 def initialize_model():
-    global model_loaded
-    if not model_loaded:
+    global Erina_model_loaded
+    if not Erina_model_loaded:
         try:
             ollama.create(model=GlobalModel, modelfile=Identity)
-            model_loaded = True
-            print("Model initialized successfully.")
+            Erina_model_loaded = True
+            print("ERINA Model initialized successfully.")
         except Exception as e:
-            print(f"Failed to initialize model: {e}")
-            
-# L.T.M Module.
-
+            print(f"Failed to initialize ERINA model: {e}")
 
 # Memory Module
 # S.T.M (Short-Term-Memory)
