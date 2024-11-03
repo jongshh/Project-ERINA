@@ -8,14 +8,11 @@ import time
 import threading
 from datetime import datetime
 from Identity import *
-from LTM_Module import *
 
 #Global Variable
 GlobalModel = 'Erina'
 Erina_model_loaded = False 
 config_file = 'config.json'
-
-# ollama.pull('rolandroland/llama3.1-uncensored')
 
 #Config Module
 def load_config(filename):
@@ -122,6 +119,7 @@ def initialize_model():
     global Erina_model_loaded
     if not Erina_model_loaded:
         try:
+            # ollama.pull('rolandroland/llama3.1-uncensored')
             ollama.create(model=GlobalModel, modelfile=Identity)
             Erina_model_loaded = True
             print("ERINA Model initialized successfully.")
@@ -160,6 +158,36 @@ def add_to_short_term_memory(memory, user_input, response, rating=None):
         "output": response,
         "rating": rating
     })
+    
+# L.T.M (Long-Term-Memory)
+def load_long_term_memory(filename):
+    if os.path.exists(filename):
+        with open(filename, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    print("Long-term memory module loaded successfully.")
+    return {
+        "appearance": [],
+        "personality": [],
+        "acquaintances": [],
+        "likes": [],
+        "dislikes": [],
+        "important-thing": []
+    }
+    
+def generate_context_with_ltm(short_term_memory, long_term_memory):
+    config = load_config('config.json')
+    MemoryLength = config['short_term_memory_length']
+    ltm_context = []
+    
+    for key, values in long_term_memory.items():
+        if values:  # Only add if there's any value
+            ltm_context.append(f"{key.capitalize()}: {', '.join(values)}")
+            
+    # print("LTM Keywords")
+    # print(ltm_context)
+    
+    short_term_context = [f"You: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
+    return "\n".join(short_term_context[-MemoryLength:] + ltm_context)  # Combine LTM and Configured STM entries
 
 # Randomspeak Module
 def generate_random_message(context):
@@ -186,11 +214,15 @@ def random_message_thread(context, random_speak_enabled):
 # Basic Text-2-Text Module
 def chat():
     config = load_config('config.json')
-    memory = load_short_term_memory('data/erina_short_term_memory.json')  # Load persistent memory
+    memory = load_short_term_memory('data/erina_short_term_memory.json')  # Load short-term memory
+    long_term_memory = load_long_term_memory('data/erina_long-term-memory.json')  # Load long-term memory
     MemoryLength = config['short_term_memory_length']
     
     print("Chat Started, Type 'exit' to quit.")
-    context = [f"You: {entry['input']} | Erina: {entry['output']}" for entry in memory[-MemoryLength:]]
+    
+    # Generate initial context
+    context_input = generate_context_with_ltm(memory, long_term_memory)
+
     conversations = memory[:]
 
     # Create a threading Event to toggle random speak mode
@@ -201,16 +233,14 @@ def chat():
         random_speak_enabled.clear()  # Disable random speaking if configured
 
     # Start the random message generation thread
-    threading.Thread(target=random_message_thread, args=(context, random_speak_enabled), daemon=True).start()
+    threading.Thread(target=random_message_thread, args=(memory, random_speak_enabled), daemon=True).start()
 
     rating_mode = config['default_ratemode']  # Use config setting
 
     while True:
         user_input = input("You: ")
         if user_input.lower() == "exit":
-            context.append(f"You: {user_input}")
-            context_input = "\n".join(context[-MemoryLength:])
-
+            context_input += f"\nYou: {user_input}"
             response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}])
             response_text = response['message']['content'].strip()
             print(f"Erina: {response_text}")
@@ -231,10 +261,9 @@ def chat():
                 print("Random speaking mode is now ON.")
             continue
 
-        context.append(f"You: {user_input}")
-        context_input = "\n".join(context[-MemoryLength:])
+        context_input += f"\nYou: {user_input}"
 
-        # Stream Erina's response
+        # Use the updated context with long-term memory for generating the response
         response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}], stream=True)
         response_text = ""
         print("Erina: ", end="", flush=True)
@@ -245,7 +274,8 @@ def chat():
             time.sleep(0.1)  # Simulate streaming delay
         print()  # New line after response
 
-        context.append(f"Erina: {response_text}")
+        # Add the response to the context
+        context_input += f"\nErina: {response_text}"
 
         if rating_mode:
             try:
