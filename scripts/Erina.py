@@ -7,7 +7,8 @@ import subprocess
 import time
 import threading
 from datetime import datetime
-from Identity import *
+# from Identity import *
+# from Model_Erina import *
 
 #Global Variable
 GlobalModel = 'Erina'
@@ -119,8 +120,7 @@ def initialize_model():
     global Erina_model_loaded
     if not Erina_model_loaded:
         try:
-            # ollama.pull('rolandroland/llama3.1-uncensored')
-            ollama.create(model=GlobalModel, modelfile=Identity)
+            #ollama.create(model=GlobalModel, modelfile='models/ERINA') # This works in only in terminal.
             Erina_model_loaded = True
             print("ERINA Model initialized successfully.")
         except Exception as e:
@@ -186,7 +186,7 @@ def generate_context_with_ltm(short_term_memory, long_term_memory):
     # print("LTM Keywords")
     # print(ltm_context)
     
-    short_term_context = [f"You: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
+    short_term_context = [f"User: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
     return "\n".join(short_term_context[-MemoryLength:] + ltm_context)  # Combine LTM and Configured STM entries
 
 # Randomspeak Module
@@ -238,12 +238,15 @@ def chat():
     rating_mode = config['default_ratemode']  # Use config setting
 
     while True:
-        user_input = input("You: ")
+        user_input = input("User: ")
         if user_input.lower() == "exit":
             context_input += f"\nYou: {user_input}"
             response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}])
             response_text = response['message']['content'].strip()
             print(f"Erina: {response_text}")
+            conversations.append({"input": user_input, "output": response_text, "rating": rating})
+            save_short_term_memory('data/erina_short_term_memory.json', conversations)
+            conversations.clear()
             break
 
         if user_input.startswith("/ratemode"):
@@ -261,7 +264,8 @@ def chat():
                 print("Random speaking mode is now ON.")
             continue
 
-        context_input += f"\nYou: {user_input}"
+        context_input += f"\nUser: {user_input}"
+        rating = 5
 
         # Use the updated context with long-term memory for generating the response
         response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}], stream=True)

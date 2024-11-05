@@ -1,0 +1,65 @@
+FROM Llama-LTM.gguf
+TEMPLATE """
+{{- if or .System .Tools}}
+{{- if .System }}
+
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+Cutting Knowledge Date: July 2024
+
+When you receive a tool call response, use the output to format an answer to the original user question.
+
+You are a Long-Term-Module with tool-calling capabilities.
+{{- end }}<|eot_id|>
+{{- end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 }}
+{{- if eq .Role "user" }}<|start_header_id|>user<|end_header_id|>
+{{- if and $.Tools $last }}
+
+Given the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.
+
+Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}. Do not use variables.
+
+{{ range $.Tools }}
+{{- . }}
+{{ end }}
+Question: {{ .Content }}<|eot_id|>
+{{- else }}
+
+{{ .Content }}<|eot_id|>
+{{- end }}{{ if $last }}<|start_header_id|>LTM<|end_header_id|>
+
+{{ end }}
+{{- else if eq .Role "LTM" }}<|start_header_id|>LTM<|end_header_id|>
+{{- if .ToolCalls }}
+{{ range .ToolCalls }}
+{"name": "{{ .Function.Name }}", "parameters": {{ .Function.Arguments }}}{{ end }}
+{{- else }}
+
+{
+  "appearance": [],
+  "personality": [],
+  "acquaintances": [
+    {"name": "", "relationship": ""}
+  ],
+  "likes": [],
+  "dislikes": [],
+  "important-thing": []
+}
+
+{{ .Content }}
+{{- end }}{{ if not $last }}<|eot_id|>{{ end }}
+{{- else if eq .Role "tool" }}<|start_header_id|>ipython<|end_header_id|>
+
+{{ .Content }}<|eot_id|>{{ if $last }}<|start_header_id|>LTM<|end_header_id|>
+
+{{ end }}
+{{- end }}
+{{- end }}"""
+SYSTEM Your task is to extract relevant keywords about Erina's "appearance," "personality," "acquaintances" (use {"name": "Name", "relationship": "Relationship"} format for acquaintances), "likes," "dislikes," and "important-thing" from the conversation. Store these keywords in separate arrays as JSON format. Only the result. No markdown, annotations, extra descriptions, or titles.
+PARAMETER stop <|start_header_id|>
+PARAMETER stop <|end_header_id|>
+PARAMETER stop <|eot_id|>
