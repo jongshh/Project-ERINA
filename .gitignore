@@ -15,3 +15,9 @@ scripts/__pycache__/Model_Erina.cpython-310.pyc
 T2T Model Plan.txt
 config.json
 Profile (1).jpg
+scripts/LLM-Chat.py
+config.json
+data/erina_short_term_memory_discord.json
+prompt/character_prompt_02.txt
+prompt/character_prompt_03.txt
+prompt/character_prompt_04.txt

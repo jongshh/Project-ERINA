@@ -14,7 +14,7 @@ from openai import OpenAI
 #Global Variable
 GlobalModel = 'Erina'
 Erina_model_loaded = False 
-config_file = 'discord_config.json'
+config_file = 'config.json'
 
 Erina_prompt_filenames = [
     'character_prompt_01.txt', 'character_prompt_05.txt' # Remove 2,3,4 Because lack of information
@@ -64,9 +64,9 @@ def load_config(filename):
 
 # UI Module
 def main_menu():
-    config = load_config('discord_config.json')
+    config = load_config('config.json')
     while True:
-        print("\n=== ERINA Discord Module Main Menu ===")
+        print("\n=== Main Menu ===")
         print("0. Set Ollama Path")
         print("1. Start Ollama")
         print("2. Start Discord Chat Module")
@@ -90,36 +90,42 @@ def main_menu():
             print("Invalid choice. Please select 0, 1, 2, 3, or 4.")
             
 def custom_erina_settings():
-    config = load_config('discord_config.json')
+    config = load_config('config.json')
     
     while True:
         print("\n=== Custom Erina Settings ===")
-        print(f"1. Short-term Memory Length: {config['short_term_memory_length']}")
-        print("2. Save and Exit")
+        print(f"1. Default Ratemode: {'On' if config['default_ratemode'] else 'Off'}")
+        print(f"2. Default Randomspeak: {'On' if config['default_randomspeak'] else 'Off'}")
+        print(f"3. Short-term Memory Length: {config['short_term_memory_length']}")
+        print("4. Save and Exit")
 
-        choice = input("Select an option (1/2): ")
+        choice = input("Select an option (1/2/3/4): ")
 
         if choice == "1":
+            config['default_ratemode'] = not config['default_ratemode']
+        elif choice == "2":
+            config['default_randomspeak'] = not config['default_randomspeak']
+        elif choice == "3":
             new_length = input("Enter new short-term memory length: ")
             if new_length.isdigit():
                 config['short_term_memory_length'] = int(new_length)
             else:
                 print("Invalid input. Please enter a valid number.")
-        elif choice == "2":
-            with open('discord_config.json', 'w', encoding='utf-8') as file:
+        elif choice == "4":
+            with open('config.json', 'w', encoding='utf-8') as file:
                 json.dump(config, file, ensure_ascii=False, indent=4)
             print("Settings saved successfully.")
             break
         else:
-            print("Invalid choice. Please select 1 or 2.")
+            print("Invalid choice. Please select 1, 2, 3, or 4.")
 
 # Ollama Module
 def set_ollama_path():
-    config = load_config('discord_config.json')
+    config = load_config('config.json')
     ollama_path = input("Enter the full path to Ollama executable: ").strip()
     config['ollama_path'] = ollama_path
     
-    with open('discord_config.json', 'w', encoding='utf-8') as file:
+    with open('config.json', 'w', encoding='utf-8') as file:
         json.dump(config, file, ensure_ascii=False, indent=4)
     
     print("Ollama path saved successfully.")
@@ -176,6 +182,57 @@ def save_short_term_memory(filename, memory):
         json.dump(combined_memory, file, ensure_ascii=False, indent=4)
         #print("Memory Module Saved successfully.") #After, Enabling this for Debugging.
 
+# def add_to_short_term_memory(memory, user_input, response, rating=None):
+#     memory.append({
+#         "timestamp": datetime.now().isoformat(),
+#         "input": user_input,
+#         "output": response,
+#         "rating": rating
+#     })
+    
+# # L.T.M (Long-Term-Memory)
+# def load_long_term_memory(filename):
+#     if os.path.exists(filename):
+#         with open(filename, 'r', encoding='utf-8') as file:
+#             return json.load(file)
+#     print("Long-term memory module loaded successfully.")
+#     return {
+#         "appearance": [],
+#         "personality": [],
+#         "acquaintances": [],
+#         "likes": [],
+#         "dislikes": [],
+#         "important-thing": []
+#     }
+
+ # Long-Term Memory context generation - Don't use because It basically trash with discord module
+# def generate_context_with_ltm(short_term_memory, long_term_memory):
+#     config = load_config('config.json')
+#     MemoryLength = config['short_term_memory_length']
+#     ltm_context = []
+    
+#     # Load the character prompts
+#     char_initial_prompt = load_character_prompt()  # Load character prompts
+    
+#     # Generate the long-term memory context
+#     for key, values in long_term_memory.items():
+#         if values:
+#             formatted_values = []
+#             for value in values:
+#                 if isinstance(value, dict):
+#                     dict_entries = ", ".join([f"{k}: {v}" for k, v in value.items()])
+#                     formatted_values.append(f"({dict_entries})")
+#                 else:
+#                     formatted_values.append(value)
+#             ltm_context.append(f"{key.capitalize()}: {', '.join(formatted_values)}")
+
+#     # Generate short-term context based on the configured memory length
+#     short_term_context = [f"User: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
+    
+#     # Combine and return the short-term and long-term memory context, including the full initial prompt
+#     return f"{char_initial_prompt}\n" + "\n".join(short_term_context[-MemoryLength:] + ltm_context)
+
+
 # Basic Text-2-Text Discord Module
 
 def discord_chat():
@@ -203,7 +260,7 @@ def discord_chat():
         
         # S.T.M load
         memory = load_short_term_memory('data/erina_short_term_memory_discord.json')
-        config = load_config('discord_config.json')
+        config = load_config('config.json')
         MemoryLength = config['short_term_memory_length']
         short_term_context = [f"{entry['input']} | Erina: {entry['output']}" for entry in memory]
 
