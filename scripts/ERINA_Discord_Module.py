@@ -1,4 +1,5 @@
 import json
+import discord
 import os
 import ollama
 import random
@@ -7,6 +8,7 @@ import subprocess
 import time
 import threading
 from datetime import datetime
+from dotenv import load_dotenv
 # from Identity import *
 # from Model_Erina import *
 
@@ -38,7 +40,7 @@ def main_menu():
         print("\n=== Main Menu ===")
         print("0. Set Ollama Path")
         print("1. Start Ollama")
-        print("2. Start Chat")
+        print("2. Start Discord Chat Module")
         print("3. Custom Erina")
         print("4. Exit")
 
@@ -49,7 +51,7 @@ def main_menu():
         elif choice == "1":
             start_ollama(config['ollama_path'])
         elif choice == "2":
-            chat()
+            discord_chat()
         elif choice == "3":
             custom_erina_settings()
         elif choice == "4":
@@ -179,6 +181,7 @@ def generate_context_with_ltm(short_term_memory, long_term_memory):
     MemoryLength = config['short_term_memory_length']
     ltm_context = []
     
+    # Long-Term Memory context generation
     for key, values in long_term_memory.items():
         if values:  # Only add if there's any value
             formatted_values = []
@@ -191,125 +194,61 @@ def generate_context_with_ltm(short_term_memory, long_term_memory):
                     formatted_values.append(value)
             ltm_context.append(f"{key.capitalize()}: {', '.join(formatted_values)}")
 
-    # Generate short-term context based on the configured memory length
+    # Short-Term Memory context generation (user's input and bot's response)
     short_term_context = [f"User: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
     
-    # Combine and return the short-term and long-term memory context
+    # Combine the short-term memory and long-term memory context
     return "\n".join(short_term_context[-MemoryLength:] + ltm_context)
 
 
-# Randomspeak Module
-def generate_random_message(context):
-    # Generate a random message with streaming
-    prompt = "\n".join(context[-5:]) + "\nErina:"
-    response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': prompt}], stream=True)
-    response_text = ""
-
-    print("Erina (random message): ", end="", flush=True)
-    for response in response_stream:
-        print(response['message']['content'], end="", flush=True)
-        response_text += response['message']['content']
-        time.sleep(0.1)  # Simulate streaming delay
-    print()  # New line after response
-    return response_text.strip()
-
-def random_message_thread(context, random_speak_enabled):
-    while True:
-        time.sleep(random.randint(10, 30))  # Random interval between 10 to 30 seconds
-        if random_speak_enabled.is_set() and context:  # Check if random speak is enabled and if there is context available
-            random_message = generate_random_message(context)
-            context.append(f"Erina: {random_message}")
-
 # Basic Text-2-Text Module
-def chat():
-    config = load_config('config.json')
-    memory = load_short_term_memory('data/erina_short_term_memory.json')  # Load short-term memory
-    long_term_memory = load_long_term_memory('data/erina_long-term-memory.json')  # Load long-term memory
-    
-    print("Chat Started, Type 'exit' to quit.")
-    
-    # Generate initial context
-    context_input = generate_context_with_ltm(memory, long_term_memory)
 
-    conversations = memory[:]
+def discord_chat():
+    load_dotenv()  # .env 파일에서 디스코드 토큰을 로드
+    TOKEN = os.getenv('DISCORD_TOKEN')
 
-    # Create a threading Event to toggle random speak mode
-    random_speak_enabled = threading.Event()
-    if config['default_randomspeak']:
-        random_speak_enabled.set()  # Enable random speaking if configured
-    else:
-        random_speak_enabled.clear()  # Disable random speaking if configured
+    # 디스코드 클라이언트 설정
+    intents = discord.Intents.default()
+    intents.message_content = True
+    client = discord.Client(intents=intents)
 
-    # Start the random message generation thread
-    threading.Thread(target=random_message_thread, args=(memory, random_speak_enabled), daemon=True).start()
+    @client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user.name}')
 
-    rating_mode = config['default_ratemode']  # Use config setting
+    @client.event
+    async def on_message(message):
+        # 단기 기억 및 장기 기억 로드
+        memory = load_short_term_memory('data/erina_short_term_memory.json')
+        long_term_memory = load_long_term_memory('data/erina_long-term-memory.json')
 
-    while True:
-        user_input = input("User: ")
-        if user_input.lower() == "exit":
-            context_input += f"\nYou: {user_input}"
-            response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}])
-            response_text = response['message']['content'].strip()
-            print(f"Erina: {response_text}")
-            conversations.append({"input": user_input, "output": response_text, "rating": rating})
-            save_short_term_memory('data/erina_short_term_memory.json', conversations)
-            conversations.clear()
-            break
+        if message.author == client.user:
+            return  # 봇이 보낸 메시지는 무시
 
-        if user_input.startswith("/ratemode"):
-            rating_mode = not rating_mode
-            mode_status = "on" if rating_mode else "off"
-            print(f"Rating mode is now {mode_status}.")
-            continue
+        # 유저 메시지 수신
+        user_input = message.content
 
-        if user_input.startswith("/randomspeak"):
-            if random_speak_enabled.is_set():
-                random_speak_enabled.clear()  # Disable random speaking
-                print("Random speaking mode is now OFF.")
-            else:
-                random_speak_enabled.set()  # Enable random speaking
-                print("Random speaking mode is now ON.")
-            continue
+        # short-term memory와 long-term memory를 합친 컨텍스트 생성
+        context_input = generate_context_with_ltm(memory, long_term_memory)
 
-        context_input += f"\nUser: {user_input}"
-        rating = 5
+        # 유저의 입력을 기존의 컨텍스트에 추가하여 새로운 대화 문맥 생성
+        context_input += f"\nUser: {user_input}"  # 유저 입력을 추가
 
-        # Use the updated context with long-term memory for generating the response
-        response_stream = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input + "\nErina:"}], stream=True)
-        response_text = ""
-        print("Erina: ", end="", flush=True)
+        # 대화 처리 (스트림 모드 없이 바로 응답 반환)
+        response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input}], stream=False)
+        response_text = response['message']['content']
 
-        for response in response_stream:
-            print(response['message']['content'], end="", flush=True)
-            response_text += response['message']['content']
-            time.sleep(0.1)  # Simulate streaming delay
-        print()  # New line after response
+        # Erina의 이름 없이 메시지 전송
+        await message.channel.send(response_text)
 
-        # Add the response to the context
-        context_input += f"\nErina: {response_text}"
+        # 새로운 대화 기록을 단기 기억에 추가 (사용자 입력과 봇 응답 별도로 저장)
+        memory.append({"input": user_input, "output": response_text, "rating": 5})
 
-        if rating_mode:
-            try:
-                rating = int(input("Rate my response from 1 to 10 (1 = terrible, 10 = excellent): "))
-                if rating < 1 or rating > 10:
-                    print("Please enter a valid rating between 1 and 10.")
-                    rating = 5
+        # 단기 기억 저장
+        save_short_term_memory('data/erina_short_term_memory.json', memory)
 
-            except ValueError:
-                print("Invalid input. Rating set to default value of 5.")
-                rating = 5  # Default to 5 on ValueError
-
-            conversations.append({"input": user_input, "output": response_text, "rating": rating})
-
-            save_short_term_memory('data/erina_short_term_memory.json', conversations)
-            conversations.clear()
-
-        else:
-            # Default rating to 5 when rating mode is off
-            conversations.append({"input": user_input, "output": response_text, "rating": 5})
-            save_short_term_memory('data/erina_short_term_memory.json', conversations)
-            conversations.clear()
+    # 디스코드 클라이언트 실행
+    client.run(TOKEN)
 
 if __name__ == "__main__":
     initialize_model()

@@ -1,0 +1,15 @@
+
+scripts/.env
+models/LTM/Llama-LTM.gguf
+models/ERINA/Llama-3.1-8B-Erina.gguf
+config.json
+config.json
+config.json
+Resize.png
+Profile (1).webp
+models/ERINA/Sample/ModelfileBackup
+models/ERINA/Sample/ModelfileEvil
+Erina.Profile.jpg
+scripts/__pycache__/Identity.cpython-310.pyc
+scripts/__pycache__/Model_Erina.cpython-310.pyc
+T2T Model Plan.txt
