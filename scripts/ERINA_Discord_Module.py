@@ -2,13 +2,12 @@ import json
 import discord
 import os
 import ollama
-import random
 import psutil
 import subprocess
-import time
-import threading
 from datetime import datetime
 from dotenv import load_dotenv
+from openai import OpenAI
+
 # from Identity import *
 # from Model_Erina import *
 
@@ -16,6 +15,36 @@ from dotenv import load_dotenv
 GlobalModel = 'Erina'
 Erina_model_loaded = False 
 config_file = 'config.json'
+
+Erina_prompt_filenames = [
+    'character_prompt_01.txt', 'character_prompt_05.txt' # Remove 2,3,4 Because lack of information
+]
+
+prompt_path = os.path.join(os.getcwd(), "prompt")
+
+#Initial Prompt (To Match with STT-TTS Module)
+
+def load_character_prompt():
+    global Erina_prompt_filenames, prompt_path
+
+    character_prompts = []
+
+    for filename in Erina_prompt_filenames:
+        path = os.path.join(prompt_path, filename)
+        print(f"Attempting to load: {path}")
+        try:
+            with open(path, 'r', encoding='utf-8') as file:
+                character_prompt = file.read()
+                print(f"Loaded content from {filename}: {character_prompt[:100]}...")  # 처음 100자만 출력
+                character_prompts.append(character_prompt)
+        except FileNotFoundError:
+            print(f"File not found: {path}")
+            character_prompts.append("")  # 파일이 없을 경우 빈 프롬프트 추가
+        except Exception as e:
+            print(f"Error reading file {path}: {e}")
+            character_prompts.append("")  # 다른 예외가 발생할 경우 빈 프롬프트 추가
+
+    return character_prompts
 
 #Config Module
 def load_config(filename):
@@ -153,52 +182,55 @@ def save_short_term_memory(filename, memory):
         json.dump(combined_memory, file, ensure_ascii=False, indent=4)
         #print("Memory Module Saved successfully.") #After, Enabling this for Debugging.
 
-def add_to_short_term_memory(memory, user_input, response, rating=None):
-    memory.append({
-        "timestamp": datetime.now().isoformat(),
-        "input": user_input,
-        "output": response,
-        "rating": rating
-    })
+# def add_to_short_term_memory(memory, user_input, response, rating=None):
+#     memory.append({
+#         "timestamp": datetime.now().isoformat(),
+#         "input": user_input,
+#         "output": response,
+#         "rating": rating
+#     })
     
-# L.T.M (Long-Term-Memory)
-def load_long_term_memory(filename):
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as file:
-            return json.load(file)
-    print("Long-term memory module loaded successfully.")
-    return {
-        "appearance": [],
-        "personality": [],
-        "acquaintances": [],
-        "likes": [],
-        "dislikes": [],
-        "important-thing": []
-    }
-    
-def generate_context_with_ltm(short_term_memory, long_term_memory):
-    config = load_config('config.json')
-    MemoryLength = config['short_term_memory_length']
-    ltm_context = []
-    
-    # Long-Term Memory context generation
-    for key, values in long_term_memory.items():
-        if values:  # Only add if there's any value
-            formatted_values = []
-            for value in values:
-                if isinstance(value, dict):
-                    # Convert dictionary items into a readable string
-                    dict_entries = ", ".join([f"{k}: {v}" for k, v in value.items()])
-                    formatted_values.append(f"({dict_entries})")
-                else:
-                    formatted_values.append(value)
-            ltm_context.append(f"{key.capitalize()}: {', '.join(formatted_values)}")
+# # L.T.M (Long-Term-Memory)
+# def load_long_term_memory(filename):
+#     if os.path.exists(filename):
+#         with open(filename, 'r', encoding='utf-8') as file:
+#             return json.load(file)
+#     print("Long-term memory module loaded successfully.")
+#     return {
+#         "appearance": [],
+#         "personality": [],
+#         "acquaintances": [],
+#         "likes": [],
+#         "dislikes": [],
+#         "important-thing": []
+#     }
 
-    # Short-Term Memory context generation (user's input and bot's response)
-    short_term_context = [f"User: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
+ # Long-Term Memory context generation - Don't use because It basically trash with discord module
+# def generate_context_with_ltm(short_term_memory, long_term_memory):
+#     config = load_config('config.json')
+#     MemoryLength = config['short_term_memory_length']
+#     ltm_context = []
     
-    # Combine the short-term memory and long-term memory context
-    return "\n".join(short_term_context[-MemoryLength:] + ltm_context)
+#     # Load the character prompts
+#     char_initial_prompt = load_character_prompt()  # Load character prompts
+    
+#     # Generate the long-term memory context
+#     for key, values in long_term_memory.items():
+#         if values:
+#             formatted_values = []
+#             for value in values:
+#                 if isinstance(value, dict):
+#                     dict_entries = ", ".join([f"{k}: {v}" for k, v in value.items()])
+#                     formatted_values.append(f"({dict_entries})")
+#                 else:
+#                     formatted_values.append(value)
+#             ltm_context.append(f"{key.capitalize()}: {', '.join(formatted_values)}")
+
+#     # Generate short-term context based on the configured memory length
+#     short_term_context = [f"User: {entry['input']} | Erina: {entry['output']}" for entry in short_term_memory]
+    
+#     # Combine and return the short-term and long-term memory context, including the full initial prompt
+#     return f"{char_initial_prompt}\n" + "\n".join(short_term_context[-MemoryLength:] + ltm_context)
 
 
 # Basic Text-2-Text Discord Module
@@ -216,42 +248,71 @@ def discord_chat():
     @client.event
     async def on_ready():
         print(f'We have logged in as {client.user.name}')
+        await client.change_presence(activity=discord.Game(name="Whac-the-Jongsh"))
+        print("Name:",client.user.name,"ID:",client.user.id,"Version:",discord.__version__)
 
     @client.event
     async def on_message(message):
-        # S.T.M and L.T.M load
-        memory = load_short_term_memory('data/erina_short_term_memory.json')
-        long_term_memory = load_long_term_memory('data/erina_long-term-memory.json')
+        
+        # Check if the message is from the allowed channe
+        if message.channel.id != allowed_channel_id:
+            return  # If it's not the allowed channel, ignore the message
+        
+        # S.T.M load
+        memory = load_short_term_memory('data/erina_short_term_memory_discord.json')
+        config = load_config('config.json')
+        MemoryLength = config['short_term_memory_length']
+        short_term_context = [f"{entry['input']} | Erina: {entry['output']}" for entry in memory]
 
         if message.author == client.user:
             return  # Ignore Bot Message
-        
-        # Check if the message is from the allowed channel
-        if message.channel.id != allowed_channel_id:
-            return  # If it's not the allowed channel, ignore the message
 
         # Receive User Message
         user_input = message.content
-        user_name = message.author.name
+        user_name = message.author.nick # User name Sometime Messing Around
 
         # Merge short-term memory long-term memory to context
-        context_input = generate_context_with_ltm(memory, long_term_memory)
+        character_prompts = load_character_prompt() # Combine this with STM Make her stupid Machine, Maybe Check the Prompt First.
 
+        # Combine all character prompts into a single string
+        # context_input = "\n".join(short_term_context[-MemoryLength:]) # Use Only One.
+        context_input = "\n".join(character_prompts + short_term_context[-MemoryLength:])
+        
         # Merge User's Input
-        context_input += f"\nUser: {user_name}" 
-        context_input += f"\nUser: {user_input}" 
+        user_prompt = f"{user_name} : {user_input}" 
+        context_input += user_prompt 
+        
+        openai_client = OpenAI(
+        base_url='http://localhost:11434/v1',
+        api_key='Erina'
+        )
+        
+        final_message = context_input
+        
+        try:
+            # Generate response from OpenAI API
+            response = openai_client.chat.completions.create(
+                model="Erina",
+                messages=[{'role': 'user', 'content': final_message}],
+                temperature=0.90,
+                stream=False,
+            )
 
-        response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input}], stream=False)
-        response_text = response['message']['content']
+            # Retrieve the response text correctly
+            response_text = response.choices[0].message.content
+            await message.channel.send(response_text)
 
-        await message.channel.send(response_text)
+            # Update and save short-term memory
+            memory.append({"input": user_input, "output": response_text, "rating": 5})
+            save_short_term_memory('data/erina_short_term_memory_discord.json', memory)
 
-        memory.append({"input": user_input, "output": response_text, "rating": 5})
-
-        save_short_term_memory('data/erina_short_term_memory.json', memory)
+        except Exception as e:
+            print(f"Error generating response: {e}")
+            await message.channel.send("I'm having trouble responding right now. Please try again later.")
 
     client.run(TOKEN)
 
 if __name__ == "__main__":
     initialize_model()
+    load_character_prompt()
     main_menu()
