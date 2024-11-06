@@ -201,16 +201,17 @@ def generate_context_with_ltm(short_term_memory, long_term_memory):
     return "\n".join(short_term_context[-MemoryLength:] + ltm_context)
 
 
-# Basic Text-2-Text Module
+# Basic Text-2-Text Discord Module
 
 def discord_chat():
-    load_dotenv()  # .env 파일에서 디스코드 토큰을 로드
+    load_dotenv()  # .env token load
     TOKEN = os.getenv('DISCORD_TOKEN')
 
-    # 디스코드 클라이언트 설정
     intents = discord.Intents.default()
     intents.message_content = True
     client = discord.Client(intents=intents)
+    
+    allowed_channel_id = 1303526310450167849
 
     @client.event
     async def on_ready():
@@ -218,36 +219,37 @@ def discord_chat():
 
     @client.event
     async def on_message(message):
-        # 단기 기억 및 장기 기억 로드
+        # S.T.M and L.T.M load
         memory = load_short_term_memory('data/erina_short_term_memory.json')
         long_term_memory = load_long_term_memory('data/erina_long-term-memory.json')
 
         if message.author == client.user:
-            return  # 봇이 보낸 메시지는 무시
+            return  # Ignore Bot Message
+        
+        # Check if the message is from the allowed channel
+        if message.channel.id != allowed_channel_id:
+            return  # If it's not the allowed channel, ignore the message
 
-        # 유저 메시지 수신
+        # Receive User Message
         user_input = message.content
+        user_name = message.author.name
 
-        # short-term memory와 long-term memory를 합친 컨텍스트 생성
+        # Merge short-term memory long-term memory to context
         context_input = generate_context_with_ltm(memory, long_term_memory)
 
-        # 유저의 입력을 기존의 컨텍스트에 추가하여 새로운 대화 문맥 생성
-        context_input += f"\nUser: {user_input}"  # 유저 입력을 추가
+        # Merge User's Input
+        context_input += f"\nUser: {user_name}" 
+        context_input += f"\nUser: {user_input}" 
 
-        # 대화 처리 (스트림 모드 없이 바로 응답 반환)
         response = ollama.chat(model=GlobalModel, messages=[{'role': 'user', 'content': context_input}], stream=False)
         response_text = response['message']['content']
 
-        # Erina의 이름 없이 메시지 전송
         await message.channel.send(response_text)
 
-        # 새로운 대화 기록을 단기 기억에 추가 (사용자 입력과 봇 응답 별도로 저장)
         memory.append({"input": user_input, "output": response_text, "rating": 5})
 
-        # 단기 기억 저장
         save_short_term_memory('data/erina_short_term_memory.json', memory)
 
-    # 디스코드 클라이언트 실행
     client.run(TOKEN)
 
 if __name__ == "__main__":
