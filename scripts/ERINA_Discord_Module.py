@@ -9,7 +9,6 @@ import re
 import io
 import contextlib
 
-from datetime import datetime
 from dotenv import load_dotenv
 from googlesearch import search  
 
@@ -37,14 +36,14 @@ def load_character_prompt():
         try:
             with open(path, 'r', encoding='utf-8') as file:
                 character_prompt = file.read()
-                # print(f"Loaded content from {filename}: {character_prompt[:100]}...")  # 처음 100자만 출력
+                # print(f"Loaded content from {filename}: {character_prompt[:100]}...")  
                 character_prompts.append(character_prompt)
         except FileNotFoundError:
             print(f"File not found: {path}")
-            character_prompts.append("")  # 파일이 없을 경우 빈 프롬프트 추가
+            character_prompts.append("") 
         except Exception as e:
             print(f"Error reading file {path}: {e}")
-            character_prompts.append("")  # 다른 예외가 발생할 경우 빈 프롬프트 추가
+            character_prompts.append("")  #
 
     return character_prompts
 
@@ -190,7 +189,7 @@ def execute_tool(code, tool_type):
 def perform_google_search(query):
     results = []
     for j in search(query, num_results=5, advanced=True):
-        results.append(f"TITLE: {j.title}\n DESC: {j.description}\n")
+        results.append(f"Title: {j.title}\n Description: {j.description}\n")
     return '\n'.join(results)
 
 
@@ -226,12 +225,14 @@ def interact_with_model(initial_messages):
                 sys.stdout.write(response_part)
                 sys.stdout.flush()
         
-
                 match = re.search(r'```(Python-exe|google-search)\s*[\n](.*?)\s*```', full_response, re.DOTALL)
                 if match:
                     tool_type, code = match.groups()
                     execution_result = execute_tool(code.strip(), tool_type)
                     print(f"\nExecuted {tool_type} Result: {execution_result}")
+                    
+                    full_response += f"\nExecuted {tool_type} Result:\n{execution_result}"
+                    
                     if execution_result.strip():
                         history.append({"role": "assistant", "content": full_response})
                         history.append({'role': 'user', 'content': f"Executed {tool_type} Result: " + execution_result.strip()})
@@ -246,7 +247,10 @@ def interact_with_model(initial_messages):
         else:
             print()  # Move to the next line if no code was detected and streaming finished
             history.append({'role': 'assistant', 'content': full_response})
+            assistant_content = '\n'.join([entry['content'] for entry in history if entry['role'] == 'assistant'])
+            full_response = assistant_content  # Update full_response to only contain assistant's content
             response_complete = True  # Exit the while loop as normal continuation if no code block found
+              
     return history, full_response
 
 # Basic Text-2-Text Discord Module
@@ -259,7 +263,8 @@ def discord_chat():
     intents.message_content = True
     client = discord.Client(intents=intents)
     
-    allowed_channel_id = 1303526310450167849
+    # allowed_channel_id = 1303858792198438972 # JSIndustries
+    allowed_channel_id = 1303526310450167849 # Private Server
 
     @client.event
     async def on_ready():
@@ -287,6 +292,7 @@ def discord_chat():
 
         # Receive User Message
         user_input = message.content
+        # print(user_input)
         user_name = message.author.nick if message.author.nick else message.author.name  # Handle missing nicknames
 
         # Merge short-term memory long-term memory to context
@@ -297,6 +303,9 @@ def discord_chat():
         
         # Merge User's Input
         user_prompt = f"{user_name}: {user_input}" 
+        
+        print(user_prompt)
+        
         context_input += user_prompt
         
         # Final message sent to the language model
